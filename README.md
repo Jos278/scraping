@@ -33,3 +33,4 @@ Después de ejecutar el script, se generarán los siguientes archivos en el dire
 - Francisco Serrano Grez
 - Daira Leylani Hernández López
 - Josue Islas Herrera
+- Luis Hernesto Piña Marcos
