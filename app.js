@@ -3,32 +3,33 @@ import fs from 'fs';
 import { Parser } from 'json2csv';
 import * as XLSX from 'xlsx';
 
-async function obtenerDatos() {
+async function obtenerDatosSerieA() {
     console.log("Iniciando navegador...");
 
     const navegador = await puppeteer.launch({
-        headless: true,
-        slowMo: 100
+        headless: false,
+        defaultViewport: null,
+        args: ['--no-sandbox', '--disable-setuid-sandbox']
     });
 
     const pagina = await navegador.newPage();
-    const numeroPaginas = 4;
+    await pagina.setUserAgent('Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/114.0.0.0 Safari/537.36');
+
     const datosTotales = [];
+    let urlActual = "https://www.transfermarkt.es/premier-league/marktwerte/wettbewerb/GB1/pos//detailpos/0/altersklasse/alle/land_id/0/plus/1";
+    const baseUrl = "https://www.transfermarkt.es";
 
-    for (let i = 0; i < numeroPaginas; i++) {
-        let url = i === 0
-            ? "https://www.transfermarkt.es/premier-league/marktwerte/wettbewerb/GB1/pos//detailpos/0/altersklasse/alle/land_id/0/plus/"
-            : `https://www.transfermarkt.es/premier-league/marktwerte/wettbewerb/GB1/pos//detailpos/0/altersklasse/alle/land_id/0/plus/${i + 1}/`;
+    while (urlActual) {
+        try {
+            console.log(`Visitando: ${urlActual}`);
+            await pagina.goto(urlActual, { waitUntil: 'domcontentloaded' });
 
-        console.log(`Visitando: ${url}`);
-        await pagina.goto(url, { waitUntil: 'domcontentloaded' });
+            await pagina.waitForSelector('.items>tbody>tr.odd, .items>tbody>tr.even');
 
-        const datos = await pagina.evaluate(() => {
-            const filas = document.querySelectorAll('.items tbody tr');
-            const jugadores = [];
-
-            filas.forEach(fila => {
-                const nombre = fila.querySelector('.hauptlink a')?.innerText.trim();
+            const datos = await pagina.evaluate(() => {
+                const filas = Array.from(document.querySelectorAll('.items>tbody>tr.odd, .items>tbody>tr.even'));
+                return filas.map(fila => {
+const nombre = fila.querySelector('.hauptlink a')?.innerText.trim();
                 const edad = fila.querySelector('td.zentriert:nth-child(4)')?.innerText.trim();
                 const posicion = fila.querySelector('td:nth-child(2) table.inline-table tr:last-child td')?.innerText.trim();
                 const imagen = fila.querySelector('td:nth-child(1) img')?.getAttribute('data-src');
@@ -42,29 +43,39 @@ async function obtenerDatos() {
                 const ultimaRevision = fila.querySelector('td.zentriert:nth-child(7)')?.innerText.trim();
                 const valorMercado = fila.querySelector('.rechts.hauptlink')?.innerText.trim();
 
-                if (nombre && posicion && valorMercado) {
-                    jugadores.push({
-                        nombre,
-                        edad,
-                        posicion,
-                        imagen,
-                        nacionalidadAlt,
-                        nacionalidad,
-                        nacionalidad2Alt,
-                        nacionalidad2,
-                        club,
-                        clubAlt,
-                        valorCarrera,
-                        ultimaRevision,
-                        valorMercado
-                    });
-                }
+                    if (nombre && posicion && valorMercado) {
+                        return {
+                            nombre,
+                            edad,
+                            posicion,
+                            imagen,
+                            nacionalidadAlt,
+                            nacionalidad,
+                            nacionalidad2Alt,
+                            nacionalidad2,
+                            club,
+                            clubAlt,
+                            valorCarrera,
+                            ultimaRevision,
+                            valorMercado
+                        };
+                    }
+                }).filter(Boolean);
             });
 
-            return jugadores;
-        });
+            datosTotales.push(...datos);
 
-        datosTotales.push(...datos);
+            const nextHref = await pagina.evaluate(() => {
+                const nextBtn = document.querySelector('li.tm-pagination__list-item--icon-next-page a');
+                return nextBtn ? nextBtn.getAttribute('href') : null;
+            });
+
+            urlActual = nextHref ? baseUrl + nextHref : null;
+
+        } catch (err) {
+            console.error("Error durante el scraping:", err.message);
+            urlActual = null;
+        }
     }
 
     await navegador.close();
@@ -95,4 +106,4 @@ async function obtenerDatos() {
     console.log("::: jugadores.xlsx CREADO :::");
 }
 
-obtenerDatos();
+obtenerDatosSerieA();
